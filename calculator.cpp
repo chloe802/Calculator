@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <sstream>
 #include <unordered_map>
@@ -7,36 +6,25 @@
 
 // Token stuff
 // Token “kind” values:
-char const number = '8';    // a floating-point number
-char const quit = 'q';      // an exit command
-char const print = ';';     // a print command
-
+char const number = '8';
+char const quit = 'q';
+char const print = ';';
+char const pi = 'p';         // Represent π
+char const func = 'f';
 class token
 {
     char kind_;       // what kind of token
     double value_;    // for numbers: a value
+    std::string name_;
 
 public:
-    // constructors
-    token(char ch)
-      : kind_(ch)
-      , value_(0)
-    {
-    }
-    token(double val)
-      : kind_(number)    // let ‘8’ represent “a number”
-      , value_(val)
-    {
-    }
+    token(char ch) : kind_(ch), value_(0) {}
+    token(double val) : kind_(number), value_(val) {}
+    token(char ch, std::string const& name) : kind_(ch), name_(name) {}
 
-    char kind() const
-    {
-        return kind_;
-    }
-    double value() const
-    {
-        return value_;
-    }
+    char kind() const { return kind_; }
+    double value() const { return value_; }
+    std::string name() const { return name_; }
 };
 
 // User interaction strings:
@@ -48,7 +36,7 @@ class token_stream
     // representation: not directly accessible to users:
     bool full;       // is there a token in the buffer?
     token buffer;    // here is where we keep a Token put back using
-                     // putback()
+    // putback()
 public:
     // user interface:
     token get();            // get a token
@@ -57,10 +45,9 @@ public:
 
     // constructor: make a token_stream, the buffer starts empty
     token_stream()
-      : full(false)
-      , buffer('\0')
-    {
-    }
+            : full(false)
+            , buffer('\0')
+    {}
 };
 
 // single global instance of the token_stream
@@ -73,7 +60,6 @@ void token_stream::putback(token t)
     buffer = t;
     full = true;
 }
-
 token token_stream::get()    // read a token from the token_stream
 {
     // check if we already have a Token ready
@@ -89,37 +75,46 @@ token token_stream::get()    // read a token from the token_stream
 
     switch (ch)
     {
-    case '(':
-    case ')':
-    case ';':
-    case 'q':
-    case '+':
-    case '-':
-    case '*':
-    case '/':
-        return token(ch);    // let each character represent itself
-    case '.':
-    case '0':
-    case '1':
-    case '2':
-    case '3':
-    case '4':
-    case '5':
-    case '6':
-    case '7':
-    case '8':
-    case '9':
-    {
-        std::cin.putback(ch);    // put digit back into the input stream
-        double val;
-        std::cin >> val;    // read a floating-point number
-        return token(val);
-    }
-    default:
-        throw std::runtime_error("Bad token");
+        case '(':
+        case ')':
+        case ';':
+        case 'q':
+        case '+':
+        case '-':
+        case '*':
+        case '/':
+            return token(ch);    // let each character represent itself
+        case '.':
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+        {
+            std::cin.putback(ch);    // put digit back into the input stream
+            double val;
+            std::cin >> val;    // read a floating-point number
+            return token(val);
+        }
+        default:
+            if (std::isalpha(ch)) {
+                std::string s;
+                s += ch;
+                while (std::cin.get(ch) && (std::isalpha(ch) || ch == '.' || std::isdigit(ch))) {
+                    s += ch;
+                }
+                std::cin.putback(ch);
+                if (s == "pi") return token(pi, s);
+                if (s == "sin" || s == "cos" || s == "tan") return token(func, s);
+            }
+            throw std::runtime_error("Bad token");
     }
 }
-
 // discard tokens up to and including a c
 void token_stream::ignore(char c)
 {
@@ -143,23 +138,31 @@ void token_stream::ignore(char c)
 // declaration so that primary() can call expression()
 double expression();
 
+
 double primary()    // Number or ‘(‘ Expression ‘)’
 {
     token t = ts.get();
-    switch (t.kind())
-    {
-    case '(':    // handle ‘(’expression ‘)’
-    {
-        double d = expression();
-        t = ts.get();
-        if (t.kind() != ')')
-            throw std::runtime_error("')' expected");
-        return d;
-    }
-    case number:    // we use ‘8’ to represent the “kind” of a number
-        return t.value();    // return the number’s value
-    default:
-        throw std::runtime_error("primary expected");
+    switch (t.kind()) {
+        case '(': {
+            double d = expression();
+            t = ts.get();
+            if (t.kind() != ')') throw std::runtime_error("')' expected");
+            return d;
+        }
+        case number:
+            return t.value();
+        case pi:
+            return M_PI;
+        case func: {
+            double arg = primary(); // Get the argument for the function
+            if (t.name() == "sin") return std::sin(arg);
+            if (t.name() == "cos") return std::cos(arg);
+            if (t.name() == "tan") return std::tan(arg);
+            if (t.name() == "pi") return M_PI;
+            throw std::runtime_error("Unsupported function");
+        }
+        default:
+            throw std::runtime_error("Primary expected");
     }
 }
 
@@ -172,20 +175,20 @@ double term()
         token t = ts.get();    // get the next Token ...
         switch (t.kind())
         {
-        case '*':
-            left *= primary();
-            break;
-        case '/':
-        {
-            double d = primary();
-            if (d == 0)
-                throw std::runtime_error("divide by zero");
-            left /= d;
-            break;
-        }
-        default:
-            ts.putback(t);    // <<< put the unused token back
-            return left;      // return the value
+            case '*':
+                left *= primary();
+                break;
+            case '/':
+            {
+                double d = primary();
+                if (d == 0)
+                    throw std::runtime_error("divide by zero");
+                left /= d;
+                break;
+            }
+            default:
+                ts.putback(t);    // <<< put the unused token back
+                return left;      // return the value
         }
     }
 }
@@ -200,15 +203,15 @@ double expression()
         token t = ts.get();    // get the next token…
         switch (t.kind())      // ... and do the right thing with it
         {
-        case '+':
-            left += term();
-            break;
-        case '-':
-            left -= term();
-            break;
-        default:
-            ts.putback(t);    // <<< put the unused token back
-            return left;      // return the value of the expression
+            case '+':
+                left += term();
+                break;
+            case '-':
+                left -= term();
+                break;
+            default:
+                ts.putback(t);    // <<< put the unused token back
+                return left;      // return the value of the expression
         }
     }
 }
@@ -286,70 +289,94 @@ double get_term(std::istringstream& iss) {// get the term
     return result;
 }
 
-double evaluate_expression(const std::string& expr) {// evaluate the expression
-    std::istringstream iss(expr);// create input string stream
-    double result = get_term(iss);// get the first term
-    char op;// store the operator
-    while (iss >> op) {// while there is an operator
-        if (op == '+' || op == '-') {// if the operator is + or -
-            double term = get_term(iss);// get the next term
-            if (op == '+')// add or subtract the term
-                result += term;// add the term
-            else
-                result -= term;// subtract the term
-        } else if (op == '%') {// if the operator is %
-            double divisor = get_term(iss);// get the divisor
-            if (divisor == 0)// if the divisor is zero, throw an exception
-                throw std::runtime_error("modulus by zero");// throw an exception
-            result = naiveModulus(result, divisor);// calculate the modulus
+double evaluate_expression(const std::string& expr) {
+    std::istringstream iss(expr);
+    std::string token;
+    while (iss >> token) {
+        if (token == "sin") {
+            double arg = get_number(iss);
+            return std::sin(arg);
+        } else if (token == "cos") {
+            double arg = get_number(iss);
+            return std::cos(arg);
+        } else if (token == "tan") {
+            double arg = get_number(iss);
+            return std::tan(arg);
+        } else if (token == "pi") {
+            return M_PI;
+        } else {
+            iss.putback(token[0]);
+            return get_term(iss);
         }
     }
-    return result;
+    return get_term(iss);
 }
 int main() {
     std::cout << "Simple Calculator" << std::endl;
-    std::cout << "Supported operators: +, -, *, /, %" << std::endl;
-    std::cout << "Enter expressions to evaluate or assign variables using the format: *variable_name* =value" << std::endl;
-    std::cout << "For example, to assign the value 5 to variable x, enter: x = 5 or y = -9 " << std::endl;
-    std::cout << "To unassign a variable, set it equal to a new value and continue use." << std::endl;
+    std::cout << "Supported operators: +, -, *, /, %, sin, cos, tan, and pi" << std::endl;
+    std::cout << "Enter expressions to evaluate or assign variables using the format: variable_name = value" << std::endl;
+    std::cout << "For example, to assign the value 5 to variable x, enter: x = 5" << std::endl;
+    std::cout << "To format sin, cos, tan, and pi, use format sin*space*value, pi*space*value, etc." << std::endl;
 
-    while (true) {// loop until user enters 'q'
-        std::string input;// store user input
-        std::cout << "Enter expression (or 'q' to quit): ";// prompt
-        std::getline(std::cin, input);// get user input
 
-        if (input == "q")// if user enters 'q', break the loop
+    while (true) {
+        std::string input;
+        std::cout << "Enter expression (or 'q' to quit): ";
+        std::getline(std::cin, input);
+
+        if (input == "q")  // Quit if the input is 'q'
             break;
 
-        size_t assignPos = input.find('=');// check if there's an assignment statement
+        size_t assignPos = input.find('=');
+        if (assignPos != std::string::npos) {
+            std::string variableName = input.substr(0, assignPos);
+            std::string valueStr = input.substr(assignPos + 1);
 
-        if (assignPos != std::string::npos) {// if there's an assignment statement
-            std::string variableName = input.substr(0, assignPos);// extract variable name
-            std::string valueStr = input.substr(assignPos + 1);// extract value as string
+            std::istringstream iss(valueStr);
+            char nextChar = iss.peek();
 
-            try {// try to convert the value string to a double
-                double value = std::stod(valueStr);// convert value string to double
-                variables[variableName] = value;// update the variable map
-                std::cout << "Assigned value " << value << " to variable " << variableName << std::endl;
-            } catch (const std::exception& e) {// catch conversion errors
-                std::cerr << "Error: Invalid value for variable " << variableName << std::endl;
+
+
+
+
+            if (std::isalpha(nextChar)) {
+                // Check if the right-hand side is another variable
+                std::string anotherVariable;
+                iss >> anotherVariable;
+                if (variables.find(anotherVariable) != variables.end()) {
+                    // If the other variable exists, assign its value
+                    variables[variableName] = variables[anotherVariable];
+                    std::cout << "Assigned value " << variableName << " to variable " << anotherVariable << std::endl;
+                } else {
+                    std::cerr << "Error: Variable " << anotherVariable << " not found." << std::endl;
+                }
+            } else {
+                // Otherwise, evaluate and assign the value
+                try {
+                    double value = evaluate_expression(valueStr);
+                    variables[variableName] = value;
+                    std::cout << "Assigned value " << value << " to variable " << variableName << std::endl;
+
+                } catch (const std::exception& e) {
+                    std::cerr << "Error: Invalid value for variable " << variableName << std::endl;
+                }
             }
-        } else {// if there's no assignment statement, evaluate the expression
-            try {// try to evaluate the expression
-                for (auto& pair : variables) {// replace variables with their values
-                    std::string variable_name = pair.first;// get variable name
-                    double variable_value = pair.second;// get variable value
-                    size_t pos = input.find(variable_name);// find variable name in input
-                    while (pos != std::string::npos) {// while variable name is found
-                        input.replace(pos, variable_name.length(), std::to_string(variable_value));// replace variable name with its value
-                        pos = input.find(variable_name, pos + 1);// find next occurrence of variable name
+        } else {
+            try {
+                for (auto& pair : variables) {
+                    std::string variable_name = pair.first;
+                    double variable_value = pair.second;
+                    size_t pos = input.find(variable_name);
+                    while (pos != std::string::npos) {
+                        input.replace(pos, variable_name.length(), std::to_string(variable_value));
+                        pos = input.find(variable_name, pos + variable_name.length());
                     }
                 }
 
-                double result = evaluate_expression(input);// evaluate the expression
-                std::cout << "Result: " << result << std::endl;// print the result
-            } catch (const std::exception& e) {// catch exceptions
-                std::cerr << "Error: " << e.what() << std::endl;// print error message
+                double result = evaluate_expression(input);
+                std::cout << "Result: " << result << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "Error: " << e.what() << std::endl;
             }
         }
     }
