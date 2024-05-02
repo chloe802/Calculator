@@ -3,6 +3,8 @@
 #include <unordered_map>
 #include <stdexcept>
 #include <cmath>
+#include <math.h>
+
 
 // Token stuff
 // Token “kind” values:
@@ -60,6 +62,7 @@ void token_stream::putback(token t)
     buffer = t;
     full = true;
 }
+
 token token_stream::get()    // read a token from the token_stream
 {
     // check if we already have a Token ready
@@ -102,19 +105,15 @@ token token_stream::get()    // read a token from the token_stream
             return token(val);
         }
         default:
-            if (std::isalpha(ch)) {
-                std::string s;
-                s += ch;
-                while (std::cin.get(ch) && (std::isalpha(ch) || ch == '.' || std::isdigit(ch))) {
-                    s += ch;
-                }
-                std::cin.putback(ch);
-                if (s == "pi") return token(pi, s);
-                if (s == "sin" || s == "cos" || s == "tan") return token(func, s);
-            }
+            std::cin.putback(ch);
+            std::string s;
+            std::cin >> s;
+            if (s == "pi") return token(pi, s);
+            if (s == "sin" || s == "cos" || s == "tan") return token(func, s);
             throw std::runtime_error("Bad token");
     }
 }
+
 // discard tokens up to and including a c
 void token_stream::ignore(char c)
 {
@@ -138,7 +137,6 @@ void token_stream::ignore(char c)
 // declaration so that primary() can call expression()
 double expression();
 
-
 double primary()    // Number or ‘(‘ Expression ‘)’
 {
     token t = ts.get();
@@ -158,7 +156,6 @@ double primary()    // Number or ‘(‘ Expression ‘)’
             if (t.name() == "sin") return std::sin(arg);
             if (t.name() == "cos") return std::cos(arg);
             if (t.name() == "tan") return std::tan(arg);
-            if (t.name() == "pi") return M_PI;
             throw std::runtime_error("Unsupported function");
         }
         default:
@@ -289,35 +286,31 @@ double get_term(std::istringstream& iss) {// get the term
     return result;
 }
 
-double evaluate_expression(const std::string& expr) {
-    std::istringstream iss(expr);
-    std::string token;
-    while (iss >> token) {
-        if (token == "sin") {
-            double arg = get_number(iss);
-            return std::sin(arg);
-        } else if (token == "cos") {
-            double arg = get_number(iss);
-            return std::cos(arg);
-        } else if (token == "tan") {
-            double arg = get_number(iss);
-            return std::tan(arg);
-        } else if (token == "pi") {
-            return M_PI;
-        } else {
-            iss.putback(token[0]);
-            return get_term(iss);
+double evaluate_expression(const std::string& expr) {// evaluate the expression
+    std::istringstream iss(expr);// create input string stream
+    double result = get_term(iss);// get the first term
+    char op;// store the operator
+    while (iss >> op) {// while there is an operator
+        if (op == '+' || op == '-') {// if the operator is + or -
+            double term = get_term(iss);// get the next term
+            if (op == '+')// add or subtract the term
+                result += term;// add the term
+            else
+                result -= term;// subtract the term
+        } else if (op == '%') {// if the operator is %
+            double divisor = get_term(iss);// get the divisor
+            if (divisor == 0)// if the divisor is zero, throw an exception
+                throw std::runtime_error("modulus by zero");// throw an exception
+            result = naiveModulus(result, divisor);// calculate the modulus
         }
     }
-    return get_term(iss);
+    return result;
 }
 int main() {
     std::cout << "Simple Calculator" << std::endl;
-    std::cout << "Supported operators: +, -, *, /, %, sin, cos, tan, and pi" << std::endl;
+    std::cout << "Supported operators: +, -, *, /, %" << std::endl;
     std::cout << "Enter expressions to evaluate or assign variables using the format: variable_name = value" << std::endl;
     std::cout << "For example, to assign the value 5 to variable x, enter: x = 5" << std::endl;
-    std::cout << "To format sin, cos, tan, and pi, use format sin*space*value, pi*space*value, etc." << std::endl;
-
 
     while (true) {
         std::string input;
@@ -334,11 +327,6 @@ int main() {
 
             std::istringstream iss(valueStr);
             char nextChar = iss.peek();
-
-
-
-
-
             if (std::isalpha(nextChar)) {
                 // Check if the right-hand side is another variable
                 std::string anotherVariable;
