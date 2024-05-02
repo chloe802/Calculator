@@ -7,6 +7,14 @@
 
 
 // Token stuff
+
+#include <iostream>
+#include <sstream>
+#include <unordered_map>
+#include <stdexcept>
+#include <cmath>
+
+// Token stuff
 // Token “kind” values:
 char const number = '8';
 char const quit = 'q';
@@ -150,7 +158,7 @@ double primary()    // Number or ‘(‘ Expression ‘)’
         case number:
             return t.value();
         case pi:
-            return M_PI;
+            return 3.14159265358979323846;
         case func: {
             double arg = primary(); // Get the argument for the function
             if (t.name() == "sin") return std::sin(arg);
@@ -190,8 +198,7 @@ double term()
     }
 }
 
-// read and evaluate: 1   1+2.5   1+2+3.14  etc.
-// 	 return the sum (or difference)
+
 double expression()
 {
     double left = term();    // get the Term
