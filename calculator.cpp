@@ -355,7 +355,7 @@ int main() {
                 } catch (const std::exception& e) {
                     std::cerr << "Error: Invalid value for variable " << variableName << std::endl;
                 }
-            }
+            }//
         } else {
             try {
                 for (auto& pair : variables) {
